@@ -6,9 +6,9 @@ Implementation of <a href="https://openreview.net/forum?id=GxjCYmQAody">N-Gramme
 
 ```bibtex
 @inproceedings{thai2020using,
-    title={N-grammer: Augmenting Transformers with latent n-grams},
-    author={Anonymous},
-    year={2021},
-    url={https://openreview.net/forum?id=GxjCYmQAody}
+    title   = {N-grammer: Augmenting Transformers with latent n-grams},
+    author  = {Anonymous},
+    year    = {2021},
+    url     = {https://openreview.net/forum?id=GxjCYmQAody}
 }
 ```
