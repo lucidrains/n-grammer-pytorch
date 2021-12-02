@@ -1,0 +1,1 @@
+from n_grammer_pytorch.n_grammer_pytorch import VQNgrammer
