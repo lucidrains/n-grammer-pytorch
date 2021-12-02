@@ -18,6 +18,7 @@ setup(
   ],
   install_requires=[
     'einops>=0.3',
+    'sympy',
     'torch>=1.6'
   ],
   classifiers=[
