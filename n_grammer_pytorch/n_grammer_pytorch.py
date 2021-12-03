@@ -22,6 +22,7 @@ def multi_way_hash_ids(x, a, b, prime, buckets):
 
 def get_bigram_ids(ids, vocab_size, segment_pos = None):
     # ids are in shape (batch, seq, heads)
+
     ids = ids.long()
     ids_0 = F.pad(ids, (0, 0, 0, 1))
     ids_1 = F.pad(ids, (0, 0, 1, 0))
@@ -30,7 +31,7 @@ def get_bigram_ids(ids, vocab_size, segment_pos = None):
         segment_pos = rearrange(segment_pos, 'b n -> b n 1')
         mask = (segment_pos == 0).long()
         mask = 1 - mask
-        mask = torch.cat((mask, pad), dim = 1)
+        mask = F.pad(mask, (0, 0, 0, 1))
         ids_1 *= mask
 
     ngram_ids = ids_0 + ids_1 * vocab_size
@@ -102,7 +103,7 @@ class VectorQuantization(nn.Module):
             nearest_one_hot = F.one_hot(cluster_ids, num_classes = num_clusters)
             per_cluster_count = nearest_one_hot.sum(dim = (0, 1))
 
-            # xum of the input per each closest centroid.
+            # sum of the input per each closest centroid.
 
             sum_x = einsum('b n h k, b n h d -> h k d', nearest_one_hot.float(), x)
 
