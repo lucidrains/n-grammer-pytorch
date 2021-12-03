@@ -40,6 +40,20 @@ def get_bigram_ids(ids, vocab_size, segment_pos = None):
     ngram_ids = ngram_ids[:, :-1]
     return ngram_ids
 
+# layernorm
+
+class MultiheadLayerNorm(nn.Module):
+    def __init__(self, dim, heads = 1, eps = 1e-5):
+        super().__init__()
+        self.eps = eps
+        self.g = nn.Parameter(torch.ones(heads, dim))
+        self.b = nn.Parameter(torch.zeros(heads, dim))
+
+    def forward(self, x):
+        std = torch.var(x, dim = -1, unbiased = False, keepdim = True).sqrt()
+        mean = torch.mean(x, dim = -1, keepdim = True)
+        return (x - mean) / (std + self.eps) * self.g + self.b
+
 # classes
 
 class VectorQuantization(nn.Module):
@@ -125,13 +139,11 @@ class Ngrammer(nn.Module):
         self.concat_ngrams = concat_ngrams
 
         self.embeddings = nn.ModuleList([])
-        self.ngram_norm = nn.ModuleList([])
-        self.input_norm = nn.ModuleList([])
+
+        self.ngram_layernorm = MultiheadLayerNorm(ngram_emb_dim, heads = num_heads)
+        self.embeds_layernorm = MultiheadLayerNorm(dim_per_head, heads = num_heads)
 
         for _ in range(num_heads):
-            self.ngram_norm.append(nn.LayerNorm(ngram_emb_dim))
-            self.input_norm.append(nn.LayerNorm(dim_per_head))
-
             head_embed = nn.Embedding(ngram_vocab_size, ngram_emb_dim)
             self.embeddings.append(head_embed)
 
@@ -147,24 +159,20 @@ class Ngrammer(nn.Module):
     ):
         num_heads, vocab_size, unigram_vocab_size = self.num_heads, self.ngram_vocab_size, self.unigram_vocab_size
 
-        normed_embeds = []
-        normed_ngram_embeds = []
+        ngram_embeds = []
 
-        embeds = rearrange(embeds, 'b n (h d) -> b n h d', h = num_heads)
-
-        for head_num, prime, input_ids_per_head, embed, ngram_emb, embed_norm, ngram_norm in zip(range(num_heads), self.primes, cluster_ids.unbind(dim = -1), embeds.unbind(dim = -2), self.embeddings, self.input_norm, self.ngram_norm):
+        for head_num, prime, input_ids_per_head, embed, ngram_emb in zip(range(num_heads), self.primes, cluster_ids.unbind(dim = -1), embeds.unbind(dim = -2), self.embeddings):
             ngram_ids = get_bigram_ids(input_ids_per_head, unigram_vocab_size, segment_pos)
             ngram_ids_for_head = multi_way_hash_ids(ngram_ids, head_num + 1, head_num + 1, prime, vocab_size)
 
             ngram_embed = ngram_emb(ngram_ids_for_head)
-            normed_ngram_embed = ngram_norm(ngram_embed)
-            normed_ngram_embeds.append(normed_ngram_embed)
+            ngram_embeds.append(ngram_embed)
 
-            normed_embed = embed_norm(embed)
-            normed_embeds.append(normed_embed)
+        embeds = rearrange(embeds, 'b n (h d) -> b n h d', h = num_heads)
+        normed_embeds = self.embeds_layernorm(embeds)
 
-        normed_embeds = torch.stack(normed_embeds, dim = -2)
-        normed_ngram_embeds = torch.stack(normed_ngram_embeds, dim = -2)
+        ngram_embeds = torch.stack(ngram_embeds, dim = -2)
+        normed_ngram_embeds = self.ngram_layernorm(ngram_embeds)
 
         if self.concat_ngrams:
             input_sliced_dim = normed_embeds.shape[-1] - normed_ngram_embeds.shape[-1]
