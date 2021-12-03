@@ -15,6 +15,7 @@ def exists(val):
 def sum_squares(t, dim = -1):
     return (t ** 2).sum(dim = dim)
 
+# bigram related functions
 
 def multi_way_hash_ids(x, a, b, prime, buckets):
     return ((x * a + b) % prime) % buckets
@@ -56,6 +57,8 @@ class VectorQuantization(nn.Module):
         self.epsilon = epsilon
         self.num_heads = num_heads
         self.dim_per_head = dim_per_head
+        self.num_clusters = num_clusters
+
         self.register_buffer('means', torch.randn(num_heads, num_clusters, dim_per_head))
 
     def forward(
@@ -63,7 +66,7 @@ class VectorQuantization(nn.Module):
         x,
         mask = None
     ):
-        h, dim_head, means = self.num_heads, self.dim_per_head, self.means
+        h, dim_head, num_clusters, eps, decay, means = self.num_heads, self.dim_per_head, self.num_clusters, self.epsilon, self.decay, self.means
         assert x.shape[-1] == (h * dim_head), f'input embedding feature dimension must be {h * dim_head}'
 
         # split heads from input
@@ -81,6 +84,27 @@ class VectorQuantization(nn.Module):
         # get cluster ids
 
         cluster_ids = dists.argmin(dim = -1)
+
+        if self.training:
+            # get one hot, for calculating number of matches per mean
+
+            nearest_one_hot = F.one_hot(cluster_ids, num_classes = num_clusters)
+            per_cluster_count = nearest_one_hot.sum(dim = (0, 1))
+
+            # xum of the input per each closest centroid.
+
+            sum_x = einsum('b n h k, b n h d -> h k d', nearest_one_hot.float(), x)
+
+            # calculate new means
+
+            new_means = sum_x / (eps + rearrange(per_cluster_count, '... -> ... 1'))
+
+            # exponential moving average
+
+            updated_means = (1. - decay) * new_means + decay * means
+
+            self.means.copy_(updated_means)
+
         return cluster_ids
 
 class Ngrammer(nn.Module):
