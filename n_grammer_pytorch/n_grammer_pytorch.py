@@ -76,9 +76,9 @@ class VectorQuantization(nn.Module):
         # get distance of input embeddings from means
 
         dists = (
-            rearrange(sum_squares(x), 'b n h -> b n h 1') -
-            2 * einsum('b n h d, h k d -> b n h k', x, means) +
-            rearrange(sum_squares(means), 'h k -> 1 1 h k')
+            rearrange(sum_squares(x), 'b n h -> b n h 1')
+            - 2 * einsum('b n h d, h k d -> b n h k', x, means)
+            + rearrange(sum_squares(means), 'h k -> 1 1 h k')
         )
 
         # get cluster ids
