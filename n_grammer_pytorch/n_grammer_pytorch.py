@@ -21,16 +21,13 @@ def multi_way_hash_ids(x, a, b, prime, buckets):
     return ((x * a + b) % prime) % buckets
 
 def get_bigram_ids(ids, vocab_size, segment_pos = None):
-    assert vocab_size > 0
-    batch_size = ids.shape[0]
-
+    # ids are in shape (batch, seq, heads)
     ids = ids.long()
-    pad = torch.zeros((batch_size, 1), dtype = torch.long)
-
-    ids_0 = torch.cat((ids, pad), dim = -1)
-    ids_1 = torch.cat((pad, ids), dim = -1)
+    ids_0 = F.pad(ids, (0, 0, 0, 1))
+    ids_1 = F.pad(ids, (0, 0, 1, 0))
 
     if exists(segment_pos):
+        segment_pos = rearrange(segment_pos, 'b n -> b n 1')
         mask = (segment_pos == 0).long()
         mask = 1 - mask
         mask = torch.cat((mask, pad), dim = 1)
@@ -146,7 +143,7 @@ class Ngrammer(nn.Module):
         self.ngram_embeds = nn.Embedding(ngram_vocab_size * num_heads, ngram_emb_dim)
 
         primes = list(sympy.primerange(ngram_vocab_size + 1, 2 * ngram_vocab_size))[:num_heads]
-        self.primes = primes
+        self.register_buffer('primes', torch.tensor(primes), persistent = False)
 
     def forward(
         self,
@@ -159,15 +156,25 @@ class Ngrammer(nn.Module):
 
         all_ngram_ids = []
 
-        for head_num, prime, input_ids_per_head in zip(range(num_heads), self.primes, cluster_ids.unbind(dim = -1)):
-            ngram_ids = get_bigram_ids(input_ids_per_head, unigram_vocab_size, segment_pos)
-            ngram_ids_for_head = multi_way_hash_ids(ngram_ids, head_num + 1, head_num + 1, prime, vocab_size)
-            all_ngram_ids.append(ngram_ids_for_head + (vocab_size * head_num))
+        ngram_cluster_ids = get_bigram_ids(cluster_ids, unigram_vocab_size, segment_pos)
+
+        # prepare arange of heads for parallel computation of multi-way hash ids
+
+        head_range = torch.arange(num_heads, device = device)
+        head_range = rearrange(head_range, 'h -> 1 1 h')
+        primes = rearrange(self.primes, 'h -> 1 1 h')
+
+        # multi-way hash ids, using https://arxiv.org/abs/1504.06804
+
+        ngram_ids = multi_way_hash_ids(ngram_cluster_ids, head_range + 1, head_range + 1, primes, vocab_size)
+
+        # shift vocab range for each head appropriately by the head number
+
+        ngram_ids = ngram_ids + (vocab_size * head_range)
 
         # get all n-gram embeddings in one go, and multi-head layernorm
 
-        all_ngram_ids = torch.stack(all_ngram_ids, dim = -1)
-        ngram_embeds = self.ngram_embeds(all_ngram_ids)
+        ngram_embeds = self.ngram_embeds(ngram_ids)
         normed_ngram_embeds = self.ngram_layernorm(ngram_embeds)
 
         # multi-head layernorm inputs
