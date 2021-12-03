@@ -143,9 +143,7 @@ class Ngrammer(nn.Module):
         self.ngram_layernorm = MultiheadLayerNorm(ngram_emb_dim, heads = num_heads)
         self.embeds_layernorm = MultiheadLayerNorm(dim_per_head, heads = num_heads)
 
-        for _ in range(num_heads):
-            head_embed = nn.Embedding(ngram_vocab_size, ngram_emb_dim)
-            self.embeddings.append(head_embed)
+        self.ngram_embeds = nn.Embedding(ngram_vocab_size * num_heads, ngram_emb_dim)
 
         primes = list(sympy.primerange(ngram_vocab_size + 1, 2 * ngram_vocab_size))[:num_heads]
         self.primes = primes
@@ -157,22 +155,27 @@ class Ngrammer(nn.Module):
         mask = None,
         segment_pos = None
     ):
-        num_heads, vocab_size, unigram_vocab_size = self.num_heads, self.ngram_vocab_size, self.unigram_vocab_size
+        num_heads, vocab_size, unigram_vocab_size, device = self.num_heads, self.ngram_vocab_size, self.unigram_vocab_size, embeds.device
 
-        ngram_embeds = []
+        all_ngram_ids = []
 
-        for head_num, prime, input_ids_per_head, embed, ngram_emb in zip(range(num_heads), self.primes, cluster_ids.unbind(dim = -1), embeds.unbind(dim = -2), self.embeddings):
+        for head_num, prime, input_ids_per_head in zip(range(num_heads), self.primes, cluster_ids.unbind(dim = -1)):
             ngram_ids = get_bigram_ids(input_ids_per_head, unigram_vocab_size, segment_pos)
             ngram_ids_for_head = multi_way_hash_ids(ngram_ids, head_num + 1, head_num + 1, prime, vocab_size)
+            all_ngram_ids.append(ngram_ids_for_head + (vocab_size * head_num))
 
-            ngram_embed = ngram_emb(ngram_ids_for_head)
-            ngram_embeds.append(ngram_embed)
+        # get all n-gram embeddings in one go, and multi-head layernorm
+
+        all_ngram_ids = torch.stack(all_ngram_ids, dim = -1)
+        ngram_embeds = self.ngram_embeds(all_ngram_ids)
+        normed_ngram_embeds = self.ngram_layernorm(ngram_embeds)
+
+        # multi-head layernorm inputs
 
         embeds = rearrange(embeds, 'b n (h d) -> b n h d', h = num_heads)
         normed_embeds = self.embeds_layernorm(embeds)
 
-        ngram_embeds = torch.stack(ngram_embeds, dim = -2)
-        normed_ngram_embeds = self.ngram_layernorm(ngram_embeds)
+        # concat original unigram embeds with bigram
 
         if self.concat_ngrams:
             input_sliced_dim = normed_embeds.shape[-1] - normed_ngram_embeds.shape[-1]
@@ -184,7 +187,11 @@ class Ngrammer(nn.Module):
         else:
             out = normed_embeds + normed_ngram_embeds
 
+        # flatten
+
         out = rearrange(out, 'b n ... -> b n (...)')
+
+        # mask if needed
 
         if exists(mask):
             out = out * rearrange(mask, 'b n -> b n 1').float()
