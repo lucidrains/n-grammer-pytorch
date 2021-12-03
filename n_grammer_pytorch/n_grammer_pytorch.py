@@ -38,6 +38,20 @@ def get_bigram_ids(ids, vocab_size, segment_pos = None):
     ngram_ids = ngram_ids[:, :-1]
     return ngram_ids
 
+# optimizer related functions
+
+def get_ngrammer_parameters(module):
+    params = set()
+    for m in module.modules():
+        if isinstance(m, VQNgrammer):
+            params.update(m.parameters())
+    rest = set(module.parameters()) - params
+    return params, rest
+
+def get_ngrammer_param_groups(module, ngrammer_learning_rate = 1e-2):
+    ngrammer_params, rest = get_ngrammer_parameters(module)
+    return [{'params': rest}, {'params': ngrammer_params, 'lr': ngrammer_learning_rate}]
+
 # layernorm
 
 class MultiheadLayerNorm(nn.Module):
