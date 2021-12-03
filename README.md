@@ -1,6 +1,6 @@
 <img src="./n-grammer.png" width="400px"></img>
 
-## N-Grammer - Pytorch (wip)
+## N-Grammer - Pytorch
 
 Implementation of <a href="https://openreview.net/forum?id=GxjCYmQAody">N-Grammer</a>, augmenting Transformers with latent n-grams, in Pytorch
 
