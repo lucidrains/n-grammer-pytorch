@@ -129,7 +129,7 @@ class VectorQuantization(nn.Module):
 
             updated_means = (1. - decay) * new_means + decay * means
 
-            self.means.copy_(updated_means)
+            self.means.data.copy_(updated_means)
 
         return cluster_ids
 
