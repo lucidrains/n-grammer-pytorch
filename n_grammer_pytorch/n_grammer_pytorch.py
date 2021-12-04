@@ -138,8 +138,8 @@ class Ngrammer(nn.Module):
         self,
         *,
         unigram_vocab_size,
-        num_heads,
         dim_per_head,
+        num_heads = 1,
         ngram_emb_dim = 8,
         ngram_vocab_size = 768 * 256,
         concat_ngrams = True
@@ -168,6 +168,9 @@ class Ngrammer(nn.Module):
         segment_pos = None
     ):
         num_heads, vocab_size, unigram_vocab_size, device = self.num_heads, self.ngram_vocab_size, self.unigram_vocab_size, embeds.device
+
+        if cluster_ids.ndim == 2 and num_heads == 1:
+            cluster_ids = rearrange(cluster_ids, '... -> ... 1')
 
         ngram_cluster_ids = get_bigram_ids(cluster_ids, unigram_vocab_size, segment_pos)
 
