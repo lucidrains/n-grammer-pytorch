@@ -46,7 +46,7 @@ def get_ngrammer_parameters(module):
         if isinstance(m, Ngrammer):
             params.update(m.parameters())
     rest = set(module.parameters()) - params
-    return params, rest
+    return list(params), list(rest)
 
 def get_ngrammer_param_groups(module, ngrammer_learning_rate = 1e-2):
     ngrammer_params, rest = get_ngrammer_parameters(module)
