@@ -43,7 +43,7 @@ def get_bigram_ids(ids, vocab_size, segment_pos = None):
 def get_ngrammer_parameters(module):
     params = set()
     for m in module.modules():
-        if isinstance(m, VQNgrammer):
+        if isinstance(m, Ngrammer):
             params.update(m.parameters())
     rest = set(module.parameters()) - params
     return params, rest
