@@ -169,8 +169,6 @@ class Ngrammer(nn.Module):
     ):
         num_heads, vocab_size, unigram_vocab_size, device = self.num_heads, self.ngram_vocab_size, self.unigram_vocab_size, embeds.device
 
-        all_ngram_ids = []
-
         ngram_cluster_ids = get_bigram_ids(cluster_ids, unigram_vocab_size, segment_pos)
 
         # prepare arange of heads for parallel computation of multi-way hash ids
