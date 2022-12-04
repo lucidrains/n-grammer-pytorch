@@ -4,7 +4,7 @@
 import torch
 import torch.nn.functional as F
 from torch import nn, einsum
-from einops import rearrange
+from einops import rearrange, repeat
 import sympy
 
 # helper functions
@@ -146,7 +146,7 @@ class Ngrammer(nn.Module):
     ):
         super().__init__()
         assert not (concat_ngrams and dim_per_head <= ngram_emb_dim), 'unigram head dimension cannot be smaller than ngram embedding dimension when concatting'
-        assert not (not concat_ngrams and dim_per_head == ngram_emb_dim), 'unigram head dimension must be equal to ngram embedding dimension if not concatting'
+        assert not (not concat_ngrams and dim_per_head != ngram_emb_dim), 'unigram head dimension must be equal to ngram embedding dimension if not concatting'
 
         self.num_heads = num_heads
         self.ngram_vocab_size = ngram_vocab_size
